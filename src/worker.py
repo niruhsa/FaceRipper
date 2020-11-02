@@ -1,10 +1,10 @@
-import sys, os, queue, json, face_recognition, cv2, time, numpy as np, string, random
-from multiprocessing import Process
+import argparse, sys, os, ffmpeg, queue, json, face_recognition, cv2, time, numpy as np, pickle, string, random
+from multiprocessing import Manager, Process
 from PIL import Image
 
 class FaceRipperWorker(Process):
 
-	def __init__(self, queue = None, id = None, tolerance = None, encodings = None, faces = None, target_dir = None, model = None, blur = 100):
+	def __init__(self, queue = None, id = None, tolerance = None, encodings = None, faces = None, target_dir = None, model = None, blur = None, save_blurry = False):
 		super(FaceRipperWorker, self).__init__()
 		self.queue = queue
 		self.id = id if id != None else 1
@@ -13,7 +13,8 @@ class FaceRipperWorker(Process):
 		self.target_dir = target_dir
 		self.faces = faces
 		self.model = model
-		self.blur_threshold = blur
+		self.blur = blur
+		self.save_blurry = save_blurry
 		self.start_time = time.time()
 		self.compute_times = [ self.start_time - self.start_time + 0.01 ]
 		self.items_pass = 0
@@ -51,10 +52,14 @@ class FaceRipperWorker(Process):
 						top, right, bottom, left = face
 						image = Image.fromarray(item[top:bottom, left:right])
 						width, height = image.size
-						blurry = self.is_blurry(item[top:bottom, left:right])
-						if width > 100 and height > 100 and not blurry:
-							image.save(escaped_path)
-							self.completed_faces += 1
+						blurry = self.isBlurry(item[top:bottom, left:right])
+						if width > 100 and height > 100:
+							if not blurry:
+								image.save(escaped_path)
+								self.completed_faces += 1
+							else:
+								if self.save_blurry:
+									image.save(os.path.normpath(os.path.join(self.target_dir, self.faces[index]["label"], ".blurry", filename)))
 			self.items += 1
 		except RuntimeError:
 			self.queue.append(item)
@@ -74,7 +79,7 @@ class FaceRipperWorker(Process):
 	def generateFileName(self, target_dir, length = 16, extension = ''):
 		id = self.randomFileName(length = length, extension = extension)
 		while os.path.exists(os.path.join(target_dir, id)): id = self.randomFileName(extension)
+
 		return id
-	
-	def is_blurry(self, image):
-		return cv2.Laplacian(image, cv2.CV_64F).var() > self.blur_threshold
+
+	def isBlurry(self, image): return cv2.Laplacian(image, cv2.CV_64F).var() < self.blur
