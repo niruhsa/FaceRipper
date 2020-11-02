@@ -1,0 +1,47 @@
+{
+    "Park Ji Hyo": {
+        "label": "박지효",
+        "group": "TWICE (트와이스)",
+        "faces_dir": "data/input/TWICE/Park Ji Hyo"
+    },
+    "Im Na Yeon": {
+        "label": "임나연",
+        "group": "TWICE (트와이스)",
+        "faces_dir": "data/input/TWICE/Im Na Yeon"
+    },
+    "Yoo Jeong Yeon": {
+        "label": "유정연",
+        "group": "TWICE (트와이스)",
+        "faces_dir": "data/input/TWICE/Yoo Jeong Yeon"
+    },
+    "Hirai Momo": {
+        "label": "平井 もも",
+        "group": "TWICE (트와이스)",
+        "faces_dir": "data/input/TWICE/Hirai Momo"
+    },
+    "Minatozaki Sana": {
+        "label": "湊崎 紗夏",
+        "group": "TWICE (트와이스)",
+        "faces_dir": "data/input/TWICE/Minatozaki Sana"
+    },
+    "Myoui Mina": {
+        "label": "名井 南",
+        "group": "TWICE (트와이스)",
+        "faces_dir": "data/input/TWICE/Myoui Mina"
+    },
+    "Kim Da Hyun": {
+        "label": "김다현",
+        "group": "TWICE (트와이스)",
+        "faces_dir": "data/input/TWICE/Kim Da Hyun"
+    },
+    "Son Chea Young": {
+        "label": "손채영",
+        "group": "TWICE (트와이스)",
+        "faces_dir": "data/input/TWICE/Son Chae Young"
+    },
+    "Chou Tzu Yu": {
+        "label": "周子瑜",
+        "group": "TWICE (트와이스)",
+        "faces_dir": "data/input/TWICE/Chou Tzu Yu"
+    }
+}
