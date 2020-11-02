@@ -42,6 +42,9 @@ Tolerance is a term that is used to define how closely related a face must be to
 ### Reference Images (Jitter & Model)
 For each person that you are matching, I'd recommend atleast 5-10 high quality photos of the person, make sure that you aren't using pictures that are detecting false faces, to test this you can use the `misc/reference_detections.py` file with the same config file to create a GUI popup of each face that it recognizes in the photos. There is a command line argument called `num_jitters` that is used to make the facial detection more stricter, the higher this number the stricter it becomes, but it takes x times longer, e.g `--jitters 100` would be 100x slower than `--jitters 0` which is the default. You can also use the `--jitters <count>` argument in the `misc/reference_detections.py` file to fine tune your reference images. You can also input the `--model` argument to specify to use either CPU or GPU in `misc/reference_detections.py`.
 
+## Datasets
+To get the dataset I'm using in `config.json`, head over to releases and download the `dataset.zip` file. Place it inside of a folder called `data` in the root directory of this repo.
+
 ## For the Future
 ### TODO
 I'd like to add a few things to this project in the future, some of these include:
