@@ -1,5 +1,6 @@
 import argparse, sys, os, ffmpeg, threading, queue, asyncio, json, face_recognition, cv2, time, numpy as np, string, random
-from multiprocessing import Process, Manager
+from db import Database
+from multiprocessing import Process, Manager, Pool
 from worker import FaceRipperWorker
 
 class FaceRipper:
@@ -16,6 +17,9 @@ class FaceRipper:
 		self.jitters = self.kwargs['jitters']
 		self.blur = self.kwargs['blur']
 		self.save_blurry = self.kwargs['save_blurry'] if self.kwargs['save_blurry'] != None else True
+		self.database = self.kwargs['database'] if self.kwargs['database'] != None else True
+		self.createDatabase = self.kwargs['create_database'] if self.kwargs['database'] != None else True
+		self.useDatabase = self.kwargs['use_database'] if self.kwargs['use_database'] != None else True
 		self.faces = []
 		self.encodings = []
 		self.queue = []
@@ -24,6 +28,9 @@ class FaceRipper:
 		if self.model == "cnn": print('[WARNING] CUDA support is unstable!')
 		else: os.environ['CUDA_LAUNCH_BLOCKING'] = str(1)
 
+		if not self.database and not self.useDatabase:
+			self.createDatabase = True
+
 		if self.workers <= 0: self.workers = 1
 
 		self.manager = Manager()
@@ -31,10 +38,8 @@ class FaceRipper:
 
 		self.loop = asyncio.get_event_loop()
 
-		if not self.config or not self.videos or not self.target_dir: os.system("python {} -h".format(sys.argv[0]))
-
+		#if self.createDatabase: self.loadFaces()
 		try:
-			self.loadFaces()
 			self.loop.run_until_complete(self.startWorkerThreads())
 			time.sleep(3)
 			self.loop.run_until_complete(self.extractVideoFrames())
@@ -46,6 +51,10 @@ class FaceRipper:
 				thread.join()
 
 	def loadFaces(self):
+		if self.database:
+			db = Database()
+			db.createTables()
+
 		if os.path.isfile(self.config):
 			print('[ OK ] Loading config...')
 			config = []
@@ -60,20 +69,20 @@ class FaceRipper:
 				os.makedirs(os.path.join(self.target_dir, label, ".blurry"), exist_ok=True)
 				if os.path.exists(person["faces_dir"]):
 					for _dir, _subdir, files in os.walk(person["faces_dir"]):
-						for file in files:
-							try:
-								file = os.path.join(person["faces_dir"], file)
-								image = face_recognition.load_image_file(file)
-								faces = face_recognition.face_locations(image, model=self.model)
-								encoding = face_recognition.face_encodings(image, faces, num_jitters=self.jitters, model="large")[0]
+						data = []
+						for i in range(len(files)):
+							file = files[i]
+							data.append((name, label, os.path.join(person["faces_dir"], file)))
 
+						pool = Pool(self.workers)
+						results = pool.map(loadFace, data)
+						pool.close()
+
+						for encoding, data in results:
+							if data:
 								self.encodings.append(encoding)
-								self.faces.append({
-									"name": name,
-									"label": label,
-									"group": person["group"]
-								})
-							except Exception as e: print('[ERROR] Failed loading file: {}, error: {}'.format(file, str(e)))
+								self.faces.append(data)
+								if self.database: db.storeFaceEncoding(encoding, name, label, person["faces_dir"])
 		else: print("[ERROR] Config file does not exist!")
 
 	async def startWorkerThreads(self):
@@ -87,7 +96,7 @@ class FaceRipper:
 				target_dir = self.target_dir,
 				model = self.model,
 				blur = self.blur,
-				save_blurry = self.save_blurry
+				save_blurry = self.save_blurry,
 			)
 			
 			thread.start()
@@ -96,6 +105,8 @@ class FaceRipper:
 	async def extractVideoFrames(self):
 		for _dir, _subdir, files in os.walk(self.videos):
 			for file in files:
+				index = files.index(file) + 1
+				start = time.time()
 				file = os.path.normpath(os.path.join(self.videos, file))
 				frames = []
 				frame_count = 0
@@ -103,7 +114,7 @@ class FaceRipper:
 				print('[ OK ] Extracting faces from video: {}'.format(file))
 				vc = cv2.VideoCapture(file)
 				while vc.isOpened():
-					if len(self.shared_list) < self.workers:
+					if len(self.shared_list) < self.workers * 4:
 						ret, frame = vc.read()
 						if not ret: break
 
@@ -111,10 +122,26 @@ class FaceRipper:
 						frame_count += 1
 
 						self.shared_list.append(frame)
+						if frame_count % 100 == 0:
+							per_second = frame_count / (time.time() - start)
+							print('[ VIDEO ] Video {}/{} || Completed {} frames. {}/frames a second'.format(index, len(files), frame_count, per_second))
 			
 			print('[ OK ] Finished...')
 			for thread in self.threads:
 				thread.terminate()
+
+def loadFace(file):
+	try:
+		name, label, file = file
+		image = face_recognition.load_image_file(file)
+		faces = face_recognition.face_locations(image, model="hog")
+		encoding = face_recognition.face_encodings(image, faces, num_jitters=0, model="large")[0]
+
+		return encoding, {
+			"name": name,
+			"label": label
+		}
+	except: return None, False
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Extract faces from videos based on predefined settings', add_help=True)
@@ -127,6 +154,9 @@ if __name__ == "__main__":
 	parser.add_argument('--model', type=str, default='hog', help='(UNSTABLE) Which face detection model to use. "hog" is less accurate but faster on CPUs. "cnn" is a more accurate deep-learning model which is GPU/CUDA accelerated (if available). Default is "hog". This can only be used when using 1 thread')
 	parser.add_argument('--blur', type=float, default=250, help='Blur detection threshold, if an face falls under this threshold it is considered blurry and discarded. Default is 250.')
 	parser.add_argument('--save-blurry', type=bool, nargs='?', default=False, help='Save the blurry images in a "blurry" folder under each label. Default is false.')
+	parser.add_argument('--database', type=bool, nargs='?', default=False, help="Store face encodings in PostgreSQL database")
+	parser.add_argument('--create-database', type=bool, nargs='?', default=False, help="Generate face encodings, if not using PostgreSQL database, this will be auto enabled each script run")
+	parser.add_argument('--use-database', type=bool, nargs='?', default=False, help="Don't generate face encodings of target images, instead use the ones stored in the PostgreSQL database")
 	args = parser.parse_args()
 
 	clean = FaceRipper(**vars(args))
